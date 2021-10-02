@@ -1,0 +1,150 @@
+---
+title: 'Lab #3'
+author: "Jung Ho Suh"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+***Part one: Extracting and loading data***
+
+
+    1. Go to https://gssdataexplorer.norc.org/
+    2. Click Search variable
+    3. Search “happy”; click add to cart; go back. Repeat for “marital status”, “highest year of school completed”, “respondents sex”, “political party affiliation”, and other variables (you decide)
+    4. After you finished adding the variables, click Actions – Save to Project
+    5. Register an account
+    6. Click Default Project
+    7. Click Actions – Extract data
+    8.  Name your extract (e.g., extract1) – click NEXT;
+        ADD ALL variables – click NEXT;
+        click NEXT;
+        Check Excel Workbook (data + metadata) and Excel Workbook (metadata only), and leave all others unchecked;
+        CREATE EXTRACT
+    9. Wait for the extract to be ready in a few minutes, and then download an archive file.
+    10. Extract the archive file (ending with .tar.gz). Windows users: You may need 7-Zip
+    11. Load the Excel file into R, using
+
+
+```{r}
+install.packages('readxl', repo="http://cran.rstudio.com/")
+install.packages("tidyverse", repo="http://cran.rstudio.com/")
+dat <- readxl::read_xls('GSS.xls')
+```
+
+  **Part two: Exploration**
+  
+Use ggplot2 to create the plots, and dplyr to manipulate the data frame as much as possible. You may want to rename the columns of the data frame for your convenience using rename in dplyr.
+
+```{r}
+library(dplyr)
+dat <- readxl::read_xls('GSS.xls')
+newdat <- dat %>%  rename('YEAR' = 'Gss year for this respondent',
+                'ID' = 'Respondent id number',
+                'MARITAL' = 'Marital status',
+                'SCHYEAR' = 'Highest year of school completed',
+                'SEX' = 'Respondents sex',
+                'POLIPARTY' = 'Political party affiliation',
+                'HAPPINESS' = 'General happiness',
+                'BALLOT' = 'Ballot used for interview')
+
+newdat <- newdat[!newdat$SCHYEAR  %in% c('No answer', 'Don\'t know'),]
+
+```
+
+Removed 'No answer' and 'Don't know' from SCHYEAR(Year attended to  school) and made the basis for consider the SCHYEAR as numeric(integer). Because of those two exceptions, SCHYEAR is considered character right now.
+
+
+  **1.  Find the average years of education for the respondents with each marital status. Arrange your output in a meaningful order and print. Describe any patterns you find.**
+  
+```{r}
+library(dplyr)
+
+newdat %>%
+  mutate(SCHYEAR = as.numeric(SCHYEAR)) %>%
+  group_by(MARITAL) %>%
+  summarize(meanEdu = mean(SCHYEAR, na.rm=TRUE)) %>%
+  arrange(meanEdu)
+```
+
+Made a table of mean of education by Marital status. It is ordered by average eduction duration and you can see that Widowed, Separated people have relatively less education compared to Never married people.
+
+
+  **2.  Create a single data frame containing records for the better educated respondents with each marital status. A “better educated” respondent is someone who has strictly more years of education than the average among those with the same marital status. Print the structure of the data frame.**
+  
+```{r}
+library(dplyr)
+
+filtered_YEAR <- newdat %>%
+  mutate(SCHYEAR = as.numeric(SCHYEAR)) %>%
+  group_by(MARITAL) %>%
+  filter(SCHYEAR > mean(SCHYEAR, na.rm=TRUE)) %>%
+  arrange(MARITAL)
+
+str(filtered_YEAR)
+```
+
+For each of the investigation below, create at least one numerical summary and one appropriate visualization. Write a paragraph to describe your findings and the variables you used.
+
+  **3. How is the happiness of a respondent related to his/her marriage status? Define that a person is happy if the response to question is “Very happy” or “Pretty happy”.**
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+filtered_HAPPY <- newdat %>%
+  filter(HAPPINESS %in% c("Very happy", "Pretty happy")) %>%
+  group_by(MARITAL)
+
+countHappy <- count(filtered_HAPPY)
+countHappy
+
+ggplot(filtered_HAPPY, aes(x=MARITAL)) + geom_bar()
+```
+
+I filtered out only the happy ones from the data. ("Very happy", "Pretty happy") As you can see, people are more likely to be happy if they are married. Following is Never married people, Divorced, Widowed, Separated.
+
+
+  4.  Does party affiliation affect the relationship you found in the last question?
+  
+```{r}
+library(dplyr)
+library(ggplot2)
+
+filtered_HAPPY_Married <- newdat %>%
+  filter(HAPPINESS %in% c("Very happy", "Pretty happy") & MARITAL == 'Married') %>%
+  group_by(POLIPARTY)
+
+filtered_HAPPY_Married$POLIPARTY <- factor(filtered_HAPPY_Married$POLIPARTY, levels = c('Strong democrat', 'Ind,near dem','Independent','Ind,near rep','Strong republican','Not str democrat','Not str republican','Other party','No answer','Don\'t know'))
+
+filtered_HAPPY_Married[order(filtered_HAPPY_Married$POLIPARTY),]
+
+countHappy <- count(filtered_HAPPY_Married)
+countHappy
+
+ggplot(filtered_HAPPY_Married, aes(x=POLIPARTY)) + geom_bar() + theme(text = element_text(size = 10), axis.text.x = element_text(angle = 90, hjust =1))
+```
+
+We induced that married people are likely to be happier than others, so to verify the exact reaction from the party affiliation, I filtered out only the people who are happy and married. From that point, democrat advocates seem to be happier on the left side of the chart, however, people who are 'not strong democrat' are happier than the opposite. In conclusion, I would say affiliation to the party does not have meaningful relations to happiness.
+
+*  **5.  Explore an interesting question (not covered by the previous questions), and answer the question using the GSS data.**
+
+How does the gender affects in happiness in a couple?
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+newdat <- newdat[!newdat$MARITAL %in% c('No answer', 'Don\'t know', 'NA'),] 
+
+newdat <- newdat[!newdat$HAPPINESS %in% c('No answer', 'Don\'t know', 'NA'),]
+                           
+newdat <- newdat[!(newdat$SEX %in% c('No answer', 'Don\'t know', 'NA')),] 
+
+ggplot(newdat, aes(x=HAPPINESS, fill = SEX)) +geom_bar() + theme(text = element_text(size = 7), axis.text.x = element_text(angle = 45, hjust =1)) + facet_wrap(~SEX +MARITAL)
+
+```
+
+Created a whole bar chart for each cases Marital status of happiness by Men and Women. It looks like Women are more happy with their marriage and men are unhappy when they are widowed or divorced compared to women.
